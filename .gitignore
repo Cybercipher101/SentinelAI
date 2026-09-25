@@ -1,0 +1,12 @@
+node_modules/
+node_modules_backup/
+.vite/
+.vite_backup/
+.env
+.env.*
+!.env.example
+node_modules/
+.vite/
+node_modules_backup/
+.vite_backup/
+.env
