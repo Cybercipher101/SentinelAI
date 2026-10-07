@@ -1,25 +1,4 @@
-export type InputKind = "url" | "email" | "file" | "network";
-export type Finding = { label: string; value: string; flagged?: boolean };
-export type ScanResult = {
-  scan_id: string;
-  module: InputKind;
-  task: string;
-  status: "complete" | "preview";
-  title: string;
-  prediction: string | null;
-  score: number | null;
-  score_type: "rule_based_risk" | null;
-  threshold: null;
-  supported_input: boolean;
-  indicators: Finding[];
-  missing_evidence: string[];
-  timestamp: string;
-  dataset_version: null;
-  preprocessing_version: string;
-  model_version: null;
-  processing_error: null;
-};
-export function newResult(module: InputKind, title: string): ScanResult {
+function newResult(module, title) {
   return {
     scan_id: crypto.randomUUID(),
     module,
@@ -40,12 +19,12 @@ export function newResult(module: InputKind, title: string): ScanResult {
     processing_error: null,
   };
 }
-export function normalizeUrl(input: string): string {
+function normalizeUrl(input) {
   const text = input.trim();
   if (!text || text.length > 4096 || /\s/.test(text))
     throw new Error("Enter a URL without spaces, up to 4,096 characters.");
   const candidate = /^[a-z][a-z\d+.-]*:/i.test(text) ? text : `https://${text}`;
-  let parsed: URL;
+  let parsed;
   try {
     parsed = new URL(candidate);
   } catch {
@@ -60,7 +39,7 @@ export function normalizeUrl(input: string): string {
     );
   return parsed.href;
 }
-export async function apiRequest(path: string, body?: unknown): Promise<any> {
+async function apiRequest(path, body) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12000);
   try {
@@ -87,11 +66,7 @@ export async function apiRequest(path: string, body?: unknown): Promise<any> {
     clearTimeout(timer);
   }
 }
-export function assessmentFromApi(
-  kind: "url" | "email",
-  title: string,
-  data: any,
-): ScanResult {
+function assessmentFromApi(kind, title, data) {
   if (
     !Number.isFinite(data?.riskScore) ||
     data.riskScore < 0 ||
@@ -115,7 +90,7 @@ export function assessmentFromApi(
   if (kind === "url") {
     if (!Array.isArray(data.lexicalFeatures))
       throw new Error("The service response is missing URL findings.");
-    result.indicators = data.lexicalFeatures.map((item: any) => ({
+    result.indicators = data.lexicalFeatures.map((item) => ({
       label: String(item.name),
       value: String(item.value),
       flagged: item.isSuspicious === true,
@@ -155,11 +130,10 @@ export function assessmentFromApi(
   }
   return result;
 }
-// Bounded CSV reader: quoted commas, escaped quotes and multiline fields are supported.
-export function inspectCsv(text: string): { rows: number; columns: string[] } {
+function inspectCsv(text) {
   if (text.includes("\0")) throw new Error("This file is not a text CSV.");
-  const records: string[][] = [];
-  let row: string[] = [],
+  const records = [];
+  let row = [],
     field = "",
     quoted = false,
     afterQuote = false;
@@ -214,10 +188,7 @@ export function inspectCsv(text: string): { rows: number; columns: string[] } {
     );
   return { rows: records.length - 1, columns };
 }
-export async function previewFile(
-  file: File,
-  kind: "file" | "network",
-): Promise<ScanResult> {
+async function previewFile(file, kind) {
   const limit = kind === "network" ? 2 * 1024 * 1024 : 10 * 1024 * 1024;
   if (!file.size || file.size > limit)
     throw new Error(
@@ -263,3 +234,11 @@ export async function previewFile(
   }
   return result;
 }
+export {
+  apiRequest,
+  assessmentFromApi,
+  inspectCsv,
+  newResult,
+  normalizeUrl,
+  previewFile,
+};

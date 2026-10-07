@@ -7,7 +7,7 @@ import {
   previewFile,
   assessmentFromApi,
   apiRequest,
-} from "../src/lib/analysis.ts";
+} from "../src/analysis.js";
 
 test("URL input normalizes domains and rejects unsupported or malformed inputs", () => {
   assert.equal(normalizeUrl(" example.com/path "), "https://example.com/path");
