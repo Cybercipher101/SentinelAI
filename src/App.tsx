@@ -2,11 +2,11 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { apiRequest, assessmentFromApi, normalizeUrl, previewFile, type InputKind, type ScanResult } from './lib/analysis';
 
 type Page = 'check' | 'history' | 'about';
-const types: { id: InputKind; label: string }[] = [
-  { id: 'url', label: 'Website URL' },
-  { id: 'email', label: 'Email' },
-  { id: 'file', label: 'File' },
-  { id: 'network', label: 'Network CSV' },
+const types: { id: InputKind; label: string; description: string }[] = [
+  { id: 'file', label: 'Malware Detection', description: 'Upload a file to view its basic information. Classification is planned for a later phase.' },
+  { id: 'url', label: 'Phishing URL Detection', description: 'Enter a website address for a rule-based URL check.' },
+  { id: 'email', label: 'Email Security', description: 'Enter an email message for a rule-based text check.' },
+  { id: 'network', label: 'Network Anomaly Detection', description: 'Upload a network CSV file to preview its rows and columns. Classification is planned for a later phase.' },
 ];
 const shortTime = (date: string) => new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -34,6 +34,7 @@ export const App = () => {
   const [service, setService] = useState<'checking' | 'available' | 'unavailable'>('checking');
   const fileInput = useRef<HTMLInputElement>(null);
   const resultTitle = useRef<HTMLHeadingElement>(null);
+  const selectedModule = types.find(type => type.id === kind)!;
 
   async function checkService() {
     setService('checking');
@@ -123,15 +124,19 @@ export const App = () => {
     <main id="content" className="wrap main">
       {page === 'check' && <>
         <h1>Check an item</h1>
-        <p className="page-intro">Choose the type of input, then see the result on this page.</p>
+        <p className="page-intro">Choose a module, enter an input, and see the result on this page.</p>
+        <section className="module-section" aria-labelledby="modules-title">
+          <h2 id="modules-title">Modules</h2>
+          <div className="module-switcher" role="group" aria-label="Select a module">
+            {types.map(item => <button key={item.id} type="button" disabled={busy} aria-pressed={kind === item.id} className={kind === item.id ? 'chosen' : ''} onClick={() => chooseType(item.id)}>{item.label}</button>)}
+          </div>
+        </section>
         <div className="columns">
           <section className="box" aria-labelledby="input-title">
-            <h2 id="input-title">1. Enter your input</h2>
+            <h2 id="input-title">1. {selectedModule.label}</h2>
+            <p className="module-description">{selectedModule.description}</p>
             <form onSubmit={submit}>
               <fieldset disabled={busy}>
-                <div className="type-list" role="group" aria-label="Input type">
-                  {types.map(item => <button type="button" key={item.id} aria-pressed={kind === item.id} className={kind === item.id ? 'chosen' : ''} onClick={() => chooseType(item.id)}>{item.label}</button>)}
-                </div>
                 {kind === 'url' && <div className="fields"><label htmlFor="url">Website URL</label><input id="url" type="text" required maxLength={4096} placeholder="https://example.com" value={url} onChange={event => setUrl(event.target.value)} /><small>The website is not opened by this check.</small></div>}
                 {kind === 'email' && <div className="fields"><label htmlFor="sender">Sender (optional)</label><input id="sender" type="email" maxLength={254} placeholder="person@example.com" value={sender} onChange={event => setSender(event.target.value)} /><label htmlFor="subject">Subject (optional)</label><input id="subject" maxLength={300} value={subject} onChange={event => setSubject(event.target.value)} /><label htmlFor="body">Email message</label><textarea id="body" required rows={6} maxLength={30000} value={body} onChange={event => setBody(event.target.value)} /><small>The sender and any attachments are not verified.</small></div>}
                 {(kind === 'file' || kind === 'network') && <div className="fields"><label htmlFor="file">{kind === 'file' ? 'Choose a file' : 'Choose a network CSV file'}</label><input ref={fileInput} id="file" type="file" accept={kind === 'network' ? '.csv,text/csv' : undefined} onChange={event => setFile(event.target.files?.[0] || null)} />{file && <small>Selected: {file.name}</small>}<small>{kind === 'file' ? 'Shows file information only. Maximum size: 10 MB.' : 'Shows rows and columns only. Maximum size: 2 MB and 10,000 rows.'}</small></div>}

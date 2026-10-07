@@ -28,7 +28,7 @@ Vite serves the application on port 3000 and proxies `/api` to the Python servic
 | File        | Actual size, filename, reported content type and SHA-256 | Local metadata only; no execution, upload, PE extraction or malware classification; 10 MB maximum                          |
 | Network CSV | Parsed row count, column names and structure validation  | Local preview only; not validated model features; no network classification or PCAP conversion; 2 MB / 10,000 rows maximum |
 
-The interface includes working examples, loading and error states, result details, JSON exports, a simple session history, and a short About page. History holds the latest 100 successful checks/previews in memory and clears on reload. Export it to keep a copy. Failed requests are shown as errors and never replaced with simulated predictions.
+The single-page interface has separate input windows for Malware Detection, Phishing URL Detection, Email Security and Network Anomaly Detection. Users switch modules above the form. It also includes working examples, loading and error states, result details, JSON exports, a simple session history, and a short About page. History holds the latest 100 successful checks/previews in memory and clears on reload. Export it to keep a copy. Failed requests are shown as errors and never replaced with simulated predictions.
 
 The normalized result format distinguishes `rule_based_risk` from a model probability. Metadata previews have null predictions and scores. Model/dataset versions stay null until evaluated models are actually integrated. No measured ML accuracy is claimed.
 
