@@ -1,322 +1,170 @@
-import React, { useState } from 'react';
-import { Navbar, NavTab } from './components/Navbar';
-import { AcademicBanner } from './components/AcademicBanner';
-import { UnifiedRiskScore } from './components/UnifiedRiskScore';
-import { MultiVectorAttackTree } from './components/MultiVectorAttackTree';
-import { TieredExecutionWidget } from './components/TieredExecutionWidget';
-import { AlertTriageFeed } from './components/AlertTriageFeed';
-import { MalwareAnalysisView } from './components/MalwareAnalysisView';
-import { PhishingUrlView } from './components/PhishingUrlView';
-import { EmailFilterView } from './components/EmailFilterView';
-import { NetworkNidsView } from './components/NetworkNidsView';
-import { XaiHubView } from './components/XaiHubView';
-import { SocChatbot } from './components/SocChatbot';
-import { IncidentPlaybooksView } from './components/IncidentPlaybooksView';
-import { ResearchDocsView } from './components/ResearchDocsView';
-import { 
-  SAMPLE_MULTI_VECTOR_CAMPAIGN, 
-  INITIAL_ALERTS, 
-  SAMPLE_MALWARE_DATA, 
-  SAMPLE_PHISHING_URLS, 
-  SAMPLE_EMAILS, 
-  SAMPLE_NETWORK_PCAP 
-} from './data/sampleScans';
-import { AlertItem } from './types/cybersecurity';
-import { 
-  Activity, 
-  Bot, 
-  Download, 
-  Flame, 
-  Radio, 
-  ShieldAlert, 
-  Terminal, 
-  Sparkles,
-  Layers,
-  ArrowRight
-} from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { apiRequest, assessmentFromApi, normalizeUrl, previewFile, type InputKind, type ScanResult } from './lib/analysis';
 
-export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
-  const [alerts, setAlerts] = useState<AlertItem[]>(INITIAL_ALERTS);
-  const [chatbotPrompt, setChatbotPrompt] = useState<string>('');
-  const [selectedMalwareSample, setSelectedMalwareSample] = useState<string>('invoice_payment_2026.exe');
-  const [selectedUrlSample, setSelectedUrlSample] = useState<string>('http://secure-login-microsoft365.account-verify.online/auth/login.php?session=9283');
-  const [selectedEmailSample, setSelectedEmailSample] = useState<string>('urgent_payroll_wire.eml');
-  const [selectedPcapSample, setSelectedPcapSample] = useState<string>('pcap_ddos_syn_flood.pcap');
-  const [activePlaybookId, setActivePlaybookId] = useState<string>('PLAYBOOK-APT-CRITICAL-CONTAINMENT');
+type Page = 'check' | 'history' | 'about';
+const types: { id: InputKind; label: string }[] = [
+  { id: 'url', label: 'Website URL' },
+  { id: 'email', label: 'Email' },
+  { id: 'file', label: 'File' },
+  { id: 'network', label: 'Network CSV' },
+];
+const shortTime = (date: string) => new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  // Unified Risk Index & Vector Scores
-  const vectorScores = {
-    malware: SAMPLE_MALWARE_DATA[selectedMalwareSample]?.overallRiskScore || 94,
-    url: SAMPLE_PHISHING_URLS[selectedUrlSample]?.riskScore || 92,
-    email: SAMPLE_EMAILS[selectedEmailSample]?.riskScore || 89,
-    network: SAMPLE_NETWORK_PCAP[selectedPcapSample]?.riskScore || 96
-  };
+function downloadJson(value: unknown, name: string) {
+  const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
 
-  // Normalization formula from Synopsis Sec 3.2 & 4.1
-  const overallRiskIndex = Math.round(
-    vectorScores.malware * 0.30 +
-    vectorScores.url * 0.20 +
-    vectorScores.email * 0.20 +
-    vectorScores.network * 0.30
-  );
+export const App = () => {
+  const [page, setPage] = useState<Page>('check');
+  const [kind, setKind] = useState<InputKind>('url');
+  const [url, setUrl] = useState('');
+  const [sender, setSender] = useState('');
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [result, setResult] = useState<ScanResult | null>(null);
+  const [history, setHistory] = useState<ScanResult[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [service, setService] = useState<'checking' | 'available' | 'unavailable'>('checking');
+  const fileInput = useRef<HTMLInputElement>(null);
+  const resultTitle = useRef<HTMLHeadingElement>(null);
 
-  const handleAskChatbot = (promptText: string) => {
-    setChatbotPrompt(promptText);
-    setActiveTab('chatbot');
-  };
-
-  const handleSelectVector = (vectorName: string, artifact: string) => {
-    if (vectorName === 'malware') {
-      setSelectedMalwareSample('invoice_payment_2026.exe');
-      setActiveTab('malware');
-    } else if (vectorName === 'url') {
-      setSelectedUrlSample('http://secure-login-microsoft365.account-verify.online/auth/login.php?session=9283');
-      setActiveTab('phishing');
-    } else if (vectorName === 'email') {
-      setSelectedEmailSample('urgent_payroll_wire.eml');
-      setActiveTab('email');
-    } else if (vectorName === 'network') {
-      setSelectedPcapSample('pcap_ddos_syn_flood.pcap');
-      setActiveTab('network');
+  async function checkService() {
+    setService('checking');
+    try {
+      const status = await apiRequest('health');
+      setService(status.status === 'online' ? 'available' : 'unavailable');
+    } catch {
+      setService('unavailable');
     }
-  };
+  }
+  useEffect(() => { void checkService(); }, []);
+  useEffect(() => { if (result) resultTitle.current?.focus(); }, [result]);
 
-  const handleInvestigateAlert = (alert: AlertItem) => {
-    if (alert.vector === 'Multi-Vector') {
-      setActiveTab('dashboard');
-    } else if (alert.vector === 'Malware') {
-      setActiveTab('malware');
-    } else if (alert.vector === 'URL') {
-      setActiveTab('phishing');
-    } else if (alert.vector === 'Email') {
-      setActiveTab('email');
-    } else if (alert.vector === 'Network') {
-      setActiveTab('network');
+  function clearForm() {
+    setUrl(''); setSender(''); setSubject(''); setBody(''); setFile(null);
+    setResult(null); setError('');
+    if (fileInput.current) fileInput.current.value = '';
+  }
+  function chooseType(next: InputKind) {
+    clearForm();
+    setKind(next);
+  }
+  function tryExample() {
+    setResult(null); setError('');
+    if (kind === 'url') setUrl('https://account-verify.example.com/login');
+    if (kind === 'email') {
+      setSender('notice@example.com');
+      setSubject('Urgent: account verification required');
+      setBody('Your account expires immediately. Verify your password to restore access. Open https://example.com/verify to confirm your identity.');
     }
-  };
+    if (kind === 'file') setFile(new File(['Example file for this prototype.\n'], 'example.txt', { type: 'text/plain' }));
+    if (kind === 'network') setFile(new File(['duration_ms,packets,bytes\n1200,18,4096\n850,12,2048\n'], 'example-flows.csv', { type: 'text/csv' }));
+  }
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(''); setResult(null); setBusy(true);
+    let requestedService = false;
+    try {
+      let next: ScanResult;
+      if (kind === 'url') {
+        const address = normalizeUrl(url);
+        requestedService = true;
+        next = assessmentFromApi('url', address, await apiRequest('scan/url', { url: address }));
+        setService('available');
+      } else if (kind === 'email') {
+        if (!body.trim()) throw new Error('Enter the email message first.');
+        requestedService = true;
+        next = assessmentFromApi('email', subject.trim() || 'Untitled email', await apiRequest('scan/email', {
+          sender: sender.trim(), subject: subject.trim(), body: body.trim(), spf: 'NONE', dkim: 'NONE', dmarc: 'NONE',
+        }));
+        setService('available');
+      } else {
+        if (!file) throw new Error('Choose a file first.');
+        next = await previewFile(file, kind);
+      }
+      setResult(next);
+      setHistory(previous => [next, ...previous].slice(0, 100));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Something went wrong. Please try again.');
+      if (requestedService) setService('unavailable');
+    } finally {
+      setBusy(false);
+    }
+  }
+  function openResult(item: ScanResult) {
+    clearForm();
+    setKind(item.module);
+    if (item.module === 'url') setUrl(item.title);
+    setResult(item);
+    setPage('check');
+  }
 
-  const handleUpdateAlertStatus = (alertId: string, newStatus: AlertItem['status']) => {
-    setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, status: newStatus } : a));
-  };
+  return <div className="site">
+    <a className="skip-link" href="#content">Skip to content</a>
+    <header className="site-header">
+      <div className="wrap header-inner">
+        <div><a href="#" className="site-name" onClick={event => { event.preventDefault(); if (!busy) setPage('check'); }}>SentinelAI</a><p>AI Cybersecurity Assistant · Phase 1</p></div>
+        <span className="university">Graphic Era Hill University<br />Team CSE27-386</span>
+      </div>
+    </header>
+    <nav className="site-nav" aria-label="Main navigation"><div className="wrap nav-inner">
+      <button disabled={busy} aria-current={page === 'check' ? 'page' : undefined} className={page === 'check' ? 'active' : ''} onClick={() => setPage('check')}>Check an item</button>
+      <button disabled={busy} aria-current={page === 'history' ? 'page' : undefined} className={page === 'history' ? 'active' : ''} onClick={() => setPage('history')}>History{history.length ? ` (${history.length})` : ''}</button>
+      <button disabled={busy} aria-current={page === 'about' ? 'page' : undefined} className={page === 'about' ? 'active' : ''} onClick={() => setPage('about')}>About</button>
+    </div></nav>
 
-  const handleExecutePlaybook = (playbookId: string) => {
-    setActivePlaybookId(playbookId);
-    setActiveTab('playbooks');
-  };
-
-  const handleExportIncidentReport = () => {
-    const reportText = `# AI CYBERSECURITY ASSISTANT - EXECUTIVE INCIDENT REPORT
-Project: AI Cybersecurity Assistance (Team CSE27-386)
-Institution: Graphic Era Hill University, Dehradun
-Date: ${new Date().toISOString()}
-
-===================================================================
-1. INCIDENT EXECUTIVE SUMMARY
-===================================================================
-Incident ID: ${SAMPLE_MULTI_VECTOR_CAMPAIGN.id}
-Campaign Name: ${SAMPLE_MULTI_VECTOR_CAMPAIGN.campaignName}
-Unified Threat Risk Score: ${overallRiskIndex} / 100 [CRITICAL RISK]
-Status: ${SAMPLE_MULTI_VECTOR_CAMPAIGN.status}
-
-Narrative:
-${SAMPLE_MULTI_VECTOR_CAMPAIGN.narrative}
-
-===================================================================
-2. CORRELATED MULTI-VECTOR TELEMETRY
-===================================================================
-- Vector 1 (Email): ${SAMPLE_EMAILS['urgent_payroll_wire.eml'].subject} [Score: ${vectorScores.email}/100, SPF: FAIL, DMARC: FAIL]
-- Vector 2 (URL): ${SAMPLE_PHISHING_URLS['http://secure-login-microsoft365.account-verify.online/auth/login.php?session=9283'].url} [Score: ${vectorScores.url}/100, Brand: Microsoft 365]
-- Vector 3 (Malware): ${SAMPLE_MALWARE_DATA['invoice_payment_2026.exe'].fileName} [Score: ${vectorScores.malware}/100, SHA256: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08]
-- Vector 4 (Network): ${SAMPLE_NETWORK_PCAP['pcap_ddos_syn_flood.pcap'].captureSource} [Score: ${vectorScores.network}/100, Reconstruction Loss: 0.942 vs 0.250]
-
-===================================================================
-3. EXPLAINABLE AI (SHAP) ATTRIBUTION
-===================================================================
-- Top Contributing Features:
-  1. Autoencoder Reconstruction Loss (>0.250) -> +0.45 SHAP
-  2. High Section Entropy in .upx0 Section (7.94) -> +0.38 SHAP
-  3. Dynamic Process Hollowing (VirtualAllocEx + RemoteThread) -> +0.34 SHAP
-  4. Deceptive Urgency Cues & Sender SPF Mismatch -> +0.42 SHAP
-
-===================================================================
-4. RECOMMENDED CONTAINMENT PROCEDURES
-===================================================================
-1. Isolate Workstation-A (192.168.1.104) via PowerShell interface disable.
-2. Block perimeter egress to C2 IP 185.220.101.5 on ports 80, 443, 8443.
-3. Terminate process handles for invoice_payment_2026.exe (PID 1044).
-4. Quarantine hash 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 in AppLocker.
-`;
-
-    const blob = new Blob([reportText], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `INCIDENT-REPORT-${SAMPLE_MULTI_VECTOR_CAMPAIGN.id}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  return (
-    <div className="min-h-screen bg-cyber-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30">
-      
-      {/* Top Academic Banner */}
-      <AcademicBanner />
-
-      {/* Main Navigation Header */}
-      <Navbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-      />
-
-      {/* Main View Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            
-            {/* Row 1: Unified Threat Index + Tiered Controller */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-7">
-                <UnifiedRiskScore 
-                  score={overallRiskIndex}
-                  vectorScores={vectorScores}
-                />
-              </div>
-              <div className="lg:col-span-5">
-                <TieredExecutionWidget />
-              </div>
-            </div>
-
-            {/* Row 2: Multi-Vector Cross-Correlation Attack Tree */}
-            <div>
-              <MultiVectorAttackTree
-                campaign={SAMPLE_MULTI_VECTOR_CAMPAIGN}
-                onSelectVector={handleSelectVector}
-                onAskChatbot={handleAskChatbot}
-              />
-            </div>
-
-            {/* Row 3: Live Alerts Feed */}
-            <div>
-              <AlertTriageFeed
-                alerts={alerts}
-                onInvestigateAlert={handleInvestigateAlert}
-                onUpdateAlertStatus={handleUpdateAlertStatus}
-              />
-            </div>
-
-            {/* Quick Action Bar for Incident Response */}
-            <div className="p-4 bg-gradient-to-r from-cyber-900 via-cyber-850 to-cyber-900 border border-cyan-500/30 rounded-xl flex flex-wrap items-center justify-between gap-4 shadow-lg">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-red-950 text-red-400 border border-red-500/40">
-                  <Flame className="w-5 h-5 animate-pulse" />
+    <main id="content" className="wrap main">
+      {page === 'check' && <>
+        <h1>Check an item</h1>
+        <p className="page-intro">Choose the type of input, then see the result on this page.</p>
+        <div className="columns">
+          <section className="box" aria-labelledby="input-title">
+            <h2 id="input-title">1. Enter your input</h2>
+            <form onSubmit={submit}>
+              <fieldset disabled={busy}>
+                <div className="type-list" role="group" aria-label="Input type">
+                  {types.map(item => <button type="button" key={item.id} aria-pressed={kind === item.id} className={kind === item.id ? 'chosen' : ''} onClick={() => chooseType(item.id)}>{item.label}</button>)}
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-100">Critical Incident Active: {SAMPLE_MULTI_VECTOR_CAMPAIGN.id}</h4>
-                  <p className="text-[11px] text-slate-400 font-mono">
-                    Multi-vector correlation detected cross-layer compromise on host 192.168.1.104
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleExecutePlaybook('PLAYBOOK-APT-CRITICAL-CONTAINMENT')}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-950 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs font-mono font-bold transition-colors"
-                >
-                  <Terminal className="w-3.5 h-3.5" />
-                  <span>Launch Containment Playbook</span>
-                </button>
-
-                <button
-                  onClick={handleExportIncidentReport}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-cyber-800 hover:bg-cyber-700 text-cyan-300 border border-cyber-border text-xs font-mono transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Export Report</span>
-                </button>
-              </div>
-            </div>
-
-          </div>
-        )}
-
-        {/* Vector 1: Malware Analysis */}
-        {activeTab === 'malware' && (
-          <MalwareAnalysisView
-            onAskChatbot={handleAskChatbot}
-            initialSample={selectedMalwareSample}
-          />
-        )}
-
-        {/* Vector 2: Phishing & URL */}
-        {activeTab === 'phishing' && (
-          <PhishingUrlView
-            onAskChatbot={handleAskChatbot}
-            initialUrlKey={selectedUrlSample}
-          />
-        )}
-
-        {/* Vector 3: Malicious Email */}
-        {activeTab === 'email' && (
-          <EmailFilterView
-            onAskChatbot={handleAskChatbot}
-            initialEmailKey={selectedEmailSample}
-          />
-        )}
-
-        {/* Vector 4: Network NIDS */}
-        {activeTab === 'network' && (
-          <NetworkNidsView
-            onAskChatbot={handleAskChatbot}
-            initialPcapKey={selectedPcapSample}
-          />
-        )}
-
-        {/* Explainable AI Hub (SHAP) */}
-        {activeTab === 'xai' && (
-          <XaiHubView />
-        )}
-
-        {/* AI SOC Chatbot Copilot */}
-        {activeTab === 'chatbot' && (
-          <SocChatbot
-            initialPrompt={chatbotPrompt}
-            onExecutePlaybook={handleExecutePlaybook}
-            onExportReport={handleExportIncidentReport}
-          />
-        )}
-
-        {/* Playbooks & Incident Response */}
-        {activeTab === 'playbooks' && (
-          <IncidentPlaybooksView
-            initialPlaybookId={activePlaybookId}
-          />
-        )}
-
-        {/* Research & Synopsis Documentation */}
-        {activeTab === 'research' && (
-          <ResearchDocsView />
-        )}
-
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-cyber-950 border-t border-cyber-border py-4 text-xs font-mono text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            AI CYBERSECURITY ASSISTANCE • Project Team: <strong className="text-cyan-400">CSE27-386</strong>
-          </div>
-          <div>
-            Graphic Era Hill University, Dehradun • Guided by Mr. Saksham Mittal
-          </div>
-          <div className="text-slate-600">
-            CNN-LSTM • Dual-Path LightGBM/DistilBERT • AE-LSTM • SHAP XAI • Grounded RAG
-          </div>
+                {kind === 'url' && <div className="fields"><label htmlFor="url">Website URL</label><input id="url" type="text" required maxLength={4096} placeholder="https://example.com" value={url} onChange={event => setUrl(event.target.value)} /><small>The website is not opened by this check.</small></div>}
+                {kind === 'email' && <div className="fields"><label htmlFor="sender">Sender (optional)</label><input id="sender" type="email" maxLength={254} placeholder="person@example.com" value={sender} onChange={event => setSender(event.target.value)} /><label htmlFor="subject">Subject (optional)</label><input id="subject" maxLength={300} value={subject} onChange={event => setSubject(event.target.value)} /><label htmlFor="body">Email message</label><textarea id="body" required rows={6} maxLength={30000} value={body} onChange={event => setBody(event.target.value)} /><small>The sender and any attachments are not verified.</small></div>}
+                {(kind === 'file' || kind === 'network') && <div className="fields"><label htmlFor="file">{kind === 'file' ? 'Choose a file' : 'Choose a network CSV file'}</label><input ref={fileInput} id="file" type="file" accept={kind === 'network' ? '.csv,text/csv' : undefined} onChange={event => setFile(event.target.files?.[0] || null)} />{file && <small>Selected: {file.name}</small>}<small>{kind === 'file' ? 'Shows file information only. Maximum size: 10 MB.' : 'Shows rows and columns only. Maximum size: 2 MB and 10,000 rows.'}</small></div>}
+                <div className="form-actions"><button type="button" className="link-button" onClick={tryExample}>Try an example</button><button type="submit" className="primary-button">{busy ? 'Checking…' : kind === 'file' || kind === 'network' ? 'Preview input' : 'Check input'}</button></div>
+              </fieldset>
+              {error && <p className="error" role="alert">{error}</p>}
+            </form>
+          </section>
+          <section className="box" aria-labelledby="output-title" aria-busy={busy}>
+            <h2 id="output-title">2. Result</h2>
+            {!result ? <p className="empty-result" role="status">{busy ? 'Checking your input…' : 'Your result will appear here after you submit an input.'}</p> : <div className="result">
+              <h3 ref={resultTitle} tabIndex={-1}>{result.prediction || 'Preview ready'}</h3>
+              <p className="result-reference">Input: {result.title}</p>
+              {result.score === null ? <p>No classification or score is available for this preview.</p> : <p><strong>Rule-based score:</strong> {result.score}/100 <span className="muted">(not a model probability)</span></p>}
+              <h4>Details</h4>
+              <dl className="details">{result.indicators.map((finding, index) => <div key={`${finding.label}-${index}`}><dt>{finding.label}</dt><dd>{finding.value}</dd></div>)}</dl>
+              <h4>What is not checked</h4>
+              <ul className="notes">{result.missing_evidence.map(note => <li key={note}>{note}</li>)}</ul>
+              <button type="button" className="secondary-button" onClick={() => downloadJson(result, `sentinel-${result.scan_id}.json`)}>Download result (JSON)</button>
+            </div>}
+          </section>
         </div>
-      </footer>
-
-    </div>
-  );
+        <p className="service-note">URL and email service: {service}. {service === 'unavailable' && <button type="button" onClick={() => void checkService()}>Check again</button>} File and CSV previews work in your browser.</p>
+      </>}
+      {page === 'history' && <>
+        <div className="page-heading"><div><h1>History</h1><p className="page-intro">Results from this session. They disappear when you reload the page.</p></div>{history.length > 0 && <button type="button" className="secondary-button" onClick={() => downloadJson(history, 'sentinel-history.json')}>Download history</button>}</div>
+        <section className="box"><h2>Previous results</h2>{history.length === 0 ? <p className="muted">No results yet. Start with a check.</p> : <ul className="history-list">{history.map(item => <li key={item.scan_id}><div><strong>{item.title}</strong><small>{types.find(type => type.id === item.module)?.label} · {item.prediction || 'Preview ready'} · {shortTime(item.timestamp)}</small></div><button type="button" onClick={() => openResult(item)}>View</button></li>)}</ul>}</section>
+      </>}
+      {page === 'about' && <>
+        <h1>About the project</h1><p className="page-intro">This is the first version of our AI Cybersecurity Assistant website.</p>
+        <section className="box about-content"><h2>What works now</h2><p>You can check a URL or email with simple rules, look at file details, and preview a network CSV file. The results are for a project demonstration and should not be used as a final security decision.</p><h2>What comes next</h2><p>The project plan includes trained models for malware, phishing URLs, email and network flows. Dataset preparation, model training and testing are still in progress.</p><h2>Project team</h2><p>Hrithik Raj, Shrut Dev Malviya, Tanisha Pandey and Amogh Singh Bisht.</p><p>Guide: Mr. Saksham Mittal, Assistant Professor, Graphic Era Hill University.</p></section>
+      </>}
+    </main>
+    <footer className="site-footer"><div className="wrap">SentinelAI · Graphic Era Hill University · Team CSE27-386</div></footer>
+  </div>;
 };

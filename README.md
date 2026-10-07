@@ -1,98 +1,58 @@
-# AI Cybersecurity Assistance — Unified Multi-Modal SOC Platform
+# SentinelAI — Phase 1 showcase
 
-An integrated, multi-modal artificial intelligence defense platform consolidating four detection engines with Explainable AI (SHAP) and a conversational Virtual SOC Copilot.
+A simple input-to-result website for the AI Cybersecurity Assistant project at Graphic Era Hill University (team CSE27-386). The current design uses a basic light layout for the project's first phase. The features follow the supplied Complete Project Guide v1.0 and Working Report v0.2.
 
----
+## Run locally
 
-## 🏛️ Academic & Project Information
+Use Node.js 24.12+ (validated with 24.19.0), npm, and Python 3.9+. The Python service uses only the standard library.
 
-- **Institution**: Graphic Era Hill University, Dehradun, Uttarakhand, India
-- **Department**: Department of Computer Science & Engineering
-- **Project Team ID**: `CSE27-386`
-- **Degree**: Bachelor of Technology in Computer Science & Engineering
-- **Date**: September-2026
-- **Project Supervisor**: **Mr. Saksham Mittal**, Assistant Professor, Dept. of CSE
-
-### 👥 Student Researchers
-1. **Hrithik Raj** (Roll Number: `2318889`)
-2. **Shrut Dev Malviya** (Roll Number: `2319611`)
-3. **Tanisha Pandey** (Roll Number: `2319728`)
-4. **Amogh Singh Bisht** (Roll Number: `2319947`)
-
----
-
-## ⚡ Quick Start
-
-### 1-Click Launch (Windows)
-Double-click `run.bat` or run in terminal:
-```cmd
-run.bat
-```
-This automatically launches both the Python Backend API Server (Port 8000) and Frontend Vite Dev Server (Port 3000), then opens `http://localhost:3000/` in your browser.
-
-### Manual Launch
-
-**Start Backend (Python):**
 ```bash
-python server.py
+npm ci
+python3 -u server.py
 ```
-*Backend API will run at `http://localhost:8000/`.*
 
-**Start Frontend (React + Vite):**
+In a second terminal, from this repository:
+
 ```bash
-npm install
-npm run dev
+npm run dev -- --host 127.0.0.1 --strictPort
 ```
-*Frontend will run at `http://localhost:3000/`.*
 
----
+Vite serves the application on port 3000 and proxies `/api` to the Python service on port 8000. Keep both processes running for URL/email checks. File and CSV previews run entirely in the browser. The same API proxy is configured for `npm run preview`; a deployed static frontend needs its hosting platform to route `/api` to the backend.
 
-## 🧩 Core Architecture & Modules
+## What works now
 
-1. **Unified SOC Command Dashboard**:
-   - Central 0–100 Unified Threat Risk Index (`0-30 Low`, `31-60 Moderate`, `61-80 Elevated`, `81-100 Critical`).
-   - Tiered Execution Controller (85% lightweight triage, saving 78.4% CPU/GPU overhead).
-   - Real-time Alert Triage Stream.
+| Input       | Current output                                           | Limits                                                                                                                     |
+| ----------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Website URL | Existing API's rule-based score and lexical findings     | Does not visit the URL or establish destination safety; no trained classifier                                              |
+| Email       | Existing API's text-cue assessment and observed counts   | No sender authentication, link verification, attachment analysis or trained spam classifier                                |
+| File        | Actual size, filename, reported content type and SHA-256 | Local metadata only; no execution, upload, PE extraction or malware classification; 10 MB maximum                          |
+| Network CSV | Parsed row count, column names and structure validation  | Local preview only; not validated model features; no network classification or PCAP conversion; 2 MB / 10,000 rows maximum |
 
-2. **Multi-Vector Cross-Correlation Engine**:
-   - Traces multi-stage attack chains across vectors:
-     $$\text{Phishing Email} \longrightarrow \text{Credential URL} \longrightarrow \text{Malware Dropper} \longrightarrow \text{C2 Network Telemetry}$$
+The interface includes working examples, loading and error states, result details, JSON exports, a simple session history, and a short About page. History holds the latest 100 successful checks/previews in memory and clears on reload. Export it to keep a copy. Failed requests are shown as errors and never replaced with simulated predictions.
 
-3. **Module 1: Malware Analysis (CNN-LSTM Hybrid)**:
-   - 2D Grayscale Byte-to-Image Canvas for CNN spatial texture anomaly detection.
-   - PE section Shannon entropy analyzer (`.text`, `.rdata`, `.upx0`, `.rsrc`).
-   - Sequential Win32 API call simulation via LSTM.
+The normalized result format distinguishes `rule_based_risk` from a model probability. Metadata previews have null predictions and scores. Model/dataset versions stay null until evaluated models are actually integrated. No measured ML accuracy is claimed.
 
-4. **Module 2: Phishing & URL Engine (Dual-Path Architecture)**:
-   - **Path A**: LightGBM analyzing 30+ structural lexical features.
-   - **Path B**: DistilBERT Transformer semantic token risk & brand impersonation detector.
+Legacy module components/data remain in the repository for reference, but the active `App.tsx` no longer renders their simulated dashboards, benchmark claims or chatbot responses. The Python heuristics remain a prototype and have not been validated as reliable security detectors.
 
-5. **Module 3: Malicious Email Filter (NLP & TF-IDF)**:
-   - Cryptographic sender verification (`SPF`, `DKIM`, `DMARC`).
-   - NLP preprocessing (Tokenization, Stop-word removal, Stemming).
-   - Psychological urgency & deceptive intent scoring.
+## Validation
 
-6. **Module 4: Network Intrusion Detection (Autoencoder-LSTM NIDS)**:
-   - Unsupervised Autoencoder reconstruction loss vs anomaly threshold ($0.250$).
-   - LSTM spatiotemporal tracking of SYN/ACK ratios & burst traffic.
+```bash
+npm test
+npm run build -- --outDir node_modules/.sentinelai-build
+```
 
-7. **Explainable AI (SHAP & LIME)**:
-   - Interactive waterfall and force plots breaking the "black box".
-   - Benchmarked at $>97\%$ accuracy across EMBER, PhiUSIIL, and CICIDS2017.
+Tests cover URL validation, CSV parsing and rejection, upload limits, actual file hashing, null preview predictions, API response adaptation and service failures. Node's built-in test runner uses native TypeScript stripping (Node 24).
 
-8. **Conversational AI Virtual SOC Assistant (RAG Grounded)**:
-   - Plain-language translation of deep learning risk scores.
-   - Context-aware remediation and instant containment commands.
+The output override preserves the repository's legacy committed `dist/` files. For the current production bundle:
 
-9. **Automated Incident Playbooks & IoC Exporter**:
-   - Step-by-step containment checklists (PowerShell, `iptables`, AppLocker).
-   - 1-click export in **STIX 2.1 JSON**, **JSON**, **CSV**, and **Markdown Audit Reports**.
+```bash
+npm run preview -- --outDir node_modules/.sentinelai-build --host 127.0.0.1 --port 4173 --strictPort
+```
 
----
+The backend must also be running. Build outputs do not contain a Python server or trained models.
 
-## 📡 Backend API Endpoints
+## Project direction
 
-- `POST /api/scan/url` — Analyzes URLs with lexical entropy, subdomain depth, TLD risk, brand impersonation, and SHAP features.
-- `POST /api/scan/email` — Evaluates inbound email text, urgency index, deceptive intent, SPF/DKIM/DMARC alignment, and TF-IDF keywords.
-- `POST /api/chat` — Conversational assistant endpoint grounded in security telemetry.
-- `GET /api/health` — System status and loaded model telemetry.
+The report selects EMBER2018 feature version 2 for static Windows PE analysis, the benign/phishing subset of ISCX-URL2016, Enron-Spam for spam/ham text, and the WTMC2021 corrected/regenerated CICIDS2017 release for network flows. Dataset acquisition, trained models, measured evaluation, persistent storage and grounded AI explanations remain future phases.
+
+Researchers: Hrithik Raj, Shrut Dev Malviya, Tanisha Pandey and Amogh Singh Bisht. Project guide: Mr. Saksham Mittal, Assistant Professor.
