@@ -1,0 +1,24 @@
+{
+  "module": "network_anomaly_detection",
+  "status": "scaffold_only",
+  "baseline": "RandomForestClassifier",
+  "comparison": "Keras dense MLP",
+  "dataset_status": "selected_not_acquired",
+  "feature_manifest": null,
+  "partition_manifest": null,
+  "model_bundle": null,
+  "model_version": null,
+  "dataset_version": null,
+  "preprocessing_version": null,
+  "calibrated": false,
+  "alert_threshold": null,
+  "backend_endpoint": "/api/network/analyze",
+  "backend_integration": "pending",
+  "target": "binary_benign_vs_retained_attack",
+  "primary_exclusions": [
+    "labels ending with - Attempted",
+    "DoS Hulk"
+  ],
+  "destination_port_policy": "excluded_initially_then_validation_ablation",
+  "attack_type_output": null
+}
