@@ -1,0 +1,20 @@
+{
+  "status": "template_not_acquired",
+  "dataset_name": null,
+  "source_url": null,
+  "release": null,
+  "licence_or_terms": null,
+  "acquired_at_utc": null,
+  "archive_sha256": null,
+  "files": [],
+  "raw_row_count": null,
+  "raw_label_counts": {},
+  "normalized_header_mapping": {},
+  "feature_schema": [],
+  "label_mapping": {},
+  "exclusions": [],
+  "duplicate_and_conflict_policy": null,
+  "partition_manifest_path": null,
+  "extractor_commit": null,
+  "environment_versions": {}
+}

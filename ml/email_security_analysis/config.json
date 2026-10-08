@@ -1,0 +1,17 @@
+{
+  "module": "email_security_analysis",
+  "status": "scaffold_only",
+  "baseline": "TF-IDF + LogisticRegression",
+  "comparison": "Keras text neural network",
+  "dataset_status": "selection_pending",
+  "feature_manifest": null,
+  "partition_manifest": null,
+  "model_bundle": null,
+  "model_version": null,
+  "dataset_version": null,
+  "preprocessing_version": null,
+  "calibrated": false,
+  "alert_threshold": null,
+  "backend_endpoint": "/api/scan/email",
+  "backend_integration": "pending"
+}
